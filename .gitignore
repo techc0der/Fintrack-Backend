@@ -1,0 +1,19 @@
+node_modules/
+
+# Secrets: live keys, JWT signing secret, database credentials.
+.env
+.env.*
+!.env.example
+
+# Local database files and the pre-MongoDB SQLite export — these hold real
+# financial records and password hashes.
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite-backup
+fintrack.db*
+
+*.log
+.DS_Store
+.vscode/
