@@ -1,4 +1,4 @@
-# FinTrack — backend.
+# FinTrack — backend
 
 Express API for FinTrack, a personal expense, income and savings tracker, with an
 AI agent that can read the user's data and record transactions on their behalf.
