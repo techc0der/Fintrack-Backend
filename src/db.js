@@ -1,4 +1,22 @@
 import { MongoClient } from 'mongodb';
+import dns from 'node:dns';
+
+/**
+ * `mongodb+srv://` needs an SRV lookup, which fails on machines whose resolver
+ * list Node reads as something unreachable (a dead local DNS proxy leaves
+ * 127.0.0.1 behind, and every query then comes back ECONNREFUSED). Setting
+ * DNS_SERVERS overrides the resolver for this process only.
+ *
+ *   DNS_SERVERS=8.8.8.8,1.1.1.1
+ *
+ * Leave it unset in any normal environment — hosting platforms resolve fine.
+ */
+const dnsServers = (process.env.DNS_SERVERS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+if (dnsServers.length) dns.setServers(dnsServers);
 
 /**
  * The four money-flow types.

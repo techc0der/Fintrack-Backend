@@ -32,8 +32,25 @@ Generate a secret with:
 node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 ```
 
-The server exits at boot if Mongo is unreachable and prints why. On Atlas that is
-almost always **Network Access** — your public IP has to be on the allowlist.
+The server exits at boot if Mongo is unreachable and prints why.
+
+Two Atlas failures worth recognising, because neither error says what it means:
+
+| Symptom | Cause |
+|---|---|
+| `querySrv ECONNREFUSED` | DNS, not Mongo. `mongodb+srv` needs an SRV lookup, and Node read an unreachable resolver from the system. Set `DNS_SERVERS=8.8.8.8,1.1.1.1` to override it for this process. |
+| `tlsv1 alert internal error` (SSL alert 80) | Your IP is not in **Network Access**. Atlas drops the TLS handshake instead of returning an auth error, so it looks like a certificate problem. |
+
+### Moving data between clusters
+
+```bash
+SOURCE_URI=mongodb://127.0.0.1:27017 \
+TARGET_URI="mongodb+srv://user:pass@host/?retryWrites=true&w=majority" \
+npm run copy:mongo                 # append -- --wipe to clear the target first
+```
+
+Documents keep their ids and are upserted, and `counters` is clamped to the highest
+id that actually landed, so ids cannot collide afterwards.
 
 The AI assistant is optional; everything else works without a key.
 

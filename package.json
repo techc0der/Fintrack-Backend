@@ -8,7 +8,9 @@
   },
   "scripts": {
     "dev": "node --watch src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "copy:mongo": "node src/copy-mongo.js",
+    "migrate:sqlite": "node src/migrate-from-sqlite.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",
