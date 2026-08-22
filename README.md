@@ -42,6 +42,32 @@ AI_PROVIDER=gemini
 GEMINI_API_KEY=...        # free tier: https://aistudio.google.com/apikey
 ```
 
+## Deploying
+
+Build command `npm install`, start command `npm start`. The host supplies `PORT`;
+the app reads it.
+
+Required environment variables:
+
+| Variable | Notes |
+|---|---|
+| `MONGODB_URI` | **Required.** The process exits at boot without a reachable database. A `127.0.0.1` URI refers to the *container's* localhost, not your machine — use Atlas. |
+| `JWT_SECRET` | A long random string. Changing it signs everyone out. |
+| `CLIENT_ORIGIN` | Comma-separated allowlist of frontend origins. Without it, any origin is reflected. |
+| `GEMINI_API_KEY` | Optional; the assistant is disabled without it. |
+
+Two things that bite on a first deploy:
+
+- **Atlas Network Access.** Your host's outbound IP has to be allowlisted. Platforms
+  with dynamic egress IPs need `0.0.0.0/0` there, which makes the database password
+  the only thing protecting it — so make it a strong one.
+- **A failed boot looks like a hang, not an error.** If Mongo is unreachable the
+  process exits, the platform's router keeps accepting connections, and requests
+  time out with no response. Check the deploy logs, not the URL.
+
+Free tiers idle out, so the first request after a quiet period can take ~50 seconds
+while the container wakes.
+
 ## Layout
 
 ```
