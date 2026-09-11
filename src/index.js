@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import api from './routes/api.js';
 import chat from './routes/chat.js';
 import { providerStatus } from './agent/providers/index.js';
-import { connect, backfillDebtCategories } from './db.js';
+import { connect, backfillDebtCategories, backfillOwnership } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -57,6 +57,7 @@ app.use((err, _req, res, _next) => {
 try {
   await connect();
   await backfillDebtCategories();
+  await backfillOwnership();
   console.log(`MongoDB connected (db "${process.env.MONGODB_DB || 'fintrack'}")`);
 } catch (err) {
   console.error('\nCould not reach MongoDB:', err.message);

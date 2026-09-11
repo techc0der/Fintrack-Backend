@@ -77,6 +77,15 @@ router.get('/analytics/trend', requireAuth, handle(async (req) => ({
   months: await fin.monthlyTrend(req.user.id, req.query.months),
 })));
 
+/** Daily series for the overview chart, with the periods the pickers offer. */
+router.get('/analytics/series', requireAuth, handle(async (req) => {
+  const [series, periods] = await Promise.all([
+    fin.spendSeries(req.user.id, req.query),
+    fin.seriesPeriods(req.user.id),
+  ]);
+  return { ...series, periods };
+}));
+
 /** Everything the dashboard needs, in one round-trip. */
 router.get('/analytics/dashboard', requireAuth, handle(async (req) => {
   const [summary, byCategory, trend, budgets, goals, recent] = await Promise.all([
@@ -89,6 +98,21 @@ router.get('/analytics/dashboard', requireAuth, handle(async (req) => {
   ]);
   return { summary, byCategory, trend, budgets, goals, recent };
 }));
+
+/* -------------------------------------------------------------------- hisaab */
+
+/** The ledger page: one month, both owners, plus the month list for the picker. */
+router.get('/hisaab', requireAuth, handle(async (req) => {
+  const [ledger, months] = await Promise.all([
+    fin.hisaab(req.user.id, req.query.month),
+    fin.hisaabMonths(req.user.id),
+  ]);
+  return { ...ledger, months };
+}));
+
+router.get('/hisaab/months', requireAuth, handle(async (req) => ({
+  months: await fin.hisaabMonths(req.user.id),
+})));
 
 /* ------------------------------------------------------------------- budgets */
 

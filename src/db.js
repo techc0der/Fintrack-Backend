@@ -19,19 +19,56 @@ const dnsServers = (process.env.DNS_SERVERS || '')
 if (dnsServers.length) dns.setServers(dnsServers);
 
 /**
- * The four money-flow types.
+ * The five money-flow types.
  *
  *   income   money in,  earned       counts toward income and savings rate
  *   borrow   money in,  a liability  excluded from income — it has to be paid back
  *   expense  money out, spending     counts toward expenses
  *   repay    money out, settling     excluded from expenses — it clears a liability
+ *   invest   money out, preserved    excluded from expenses — it changes form, not owner
+ *   lend     money out, owed to you  excluded from expenses — you get it back
+ *   recover  money in,  yours again  excluded from income — it was already yours
  *
- * Keeping borrow/repay out of the income and expense totals is the whole point:
- * filing a loan as income would inflate both net and savings rate.
+ * Keeping borrow/repay/invest out of the income and expense totals is the whole
+ * point: a loan filed as income inflates the savings rate, and money moved into
+ * a mutual fund has not been spent — you still own it.
  */
-export const FLOW_TYPES = ['income', 'expense', 'borrow', 'repay'];
-export const CREDIT_TYPES = ['income', 'borrow'];
-export const DEBT_TYPES = ['borrow', 'repay'];
+export const FLOW_TYPES = [
+  'income',
+  'expense',
+  'invest',
+  'borrow',
+  'repay',
+  'lend',
+  'recover',
+];
+export const CREDIT_TYPES = ['income', 'borrow', 'recover'];
+
+/**
+ * The four flows that move money between you and other people. Net them and you
+ * get the credit balance: positive means you are holding money that is not
+ * yours, negative means your money is out with someone else.
+ *
+ *   borrow   they hand you money      +  you owe it back
+ *   repay    you hand it back         -
+ *   lend     you hand someone money   -  they owe it back
+ *   recover  they hand it back        +
+ */
+export const DEBT_TYPES = ['borrow', 'repay', 'lend', 'recover'];
+export const CREDIT_IN = ['borrow', 'recover'];
+export const CREDIT_OUT = ['lend', 'repay'];
+
+/**
+ * Whose money this is. The hisaab ledger keeps two purses side by side and never
+ * mixes them: every figure on that page is reported per owner.
+ */
+export const OWNERS = ['me', 'father'];
+
+/**
+ * How the money moved. The spent section splits on this, because cash in hand
+ * and money that left a bank account are tracked differently in practice.
+ */
+export const METHODS = ['cash', 'bank'];
 
 const URI = process.env.MONGODB_URI;
 const DB_NAME = process.env.MONGODB_DB || 'fintrack';
@@ -72,7 +109,11 @@ export async function nextId(name) {
 const typeValidator = {
   $jsonSchema: {
     bsonType: 'object',
-    properties: { type: { enum: FLOW_TYPES } },
+    properties: {
+      type: { enum: FLOW_TYPES },
+      owner: { enum: OWNERS },
+      method: { enum: [...METHODS, null] },
+    },
   },
 };
 
@@ -110,6 +151,7 @@ export async function connect() {
     col.categories.createIndex({ user_id: 1, name: 1, type: 1 }, { unique: true }),
     col.transactions.createIndex({ user_id: 1, date: -1 }),
     col.transactions.createIndex({ user_id: 1, category: 1 }),
+    col.transactions.createIndex({ user_id: 1, owner: 1, date: -1 }),
     col.budgets.createIndex({ user_id: 1, category: 1, period: 1 }, { unique: true }),
     col.goals.createIndex({ user_id: 1 }),
     col.chat_messages.createIndex({ user_id: 1, _id: 1 }),
@@ -159,6 +201,22 @@ const DEFAULT_CATEGORIES = [
   ['From family or friends', 'borrow', 'people'],
   ['Other borrowing', 'borrow', 'tag'],
 
+  ['Mutual fund / SIP', 'invest', 'chart'],
+  ['Stocks', 'invest', 'chart'],
+  ['Gold', 'invest', 'gold'],
+  ['Fixed deposit', 'invest', 'bank'],
+  ['Insurance / LIC', 'invest', 'shield'],
+  ['Property', 'invest', 'home'],
+  ['Other investment', 'invest', 'tag'],
+
+  ['Lent to family or friends', 'lend', 'people'],
+  ['Lent to a colleague', 'lend', 'people'],
+  ['Other lending', 'lend', 'tag'],
+
+  ['Returned by family or friends', 'recover', 'people'],
+  ['Returned by a colleague', 'recover', 'people'],
+  ['Other recovery', 'recover', 'tag'],
+
   ['Loan repayment', 'repay', 'bank'],
   ['Credit card payment', 'repay', 'card'],
   ['Repay family or friends', 'repay', 'people'],
@@ -191,4 +249,25 @@ export async function seedDefaults(userId) {
 export async function backfillDebtCategories() {
   const users = await col.users.find({}, { projection: { _id: 1 } }).toArray();
   for (const u of users) await seedCategories(u._id);
+}
+
+/**
+ * Rows written before the ledger existed carry no owner or method. They were all
+ * entered by the account holder, so 'me' is certain; 'bank' is a guess for method
+ * and is easily corrected by editing the entry.
+ */
+export async function backfillOwnership() {
+  const owner = await col.transactions.updateMany(
+    { owner: { $exists: false } },
+    { $set: { owner: 'me' } }
+  );
+  const method = await col.transactions.updateMany(
+    { method: { $exists: false } },
+    { $set: { method: 'bank' } }
+  );
+  if (owner.modifiedCount || method.modifiedCount) {
+    console.log(
+      `[db] backfilled ${owner.modifiedCount} owner and ${method.modifiedCount} method fields`
+    );
+  }
 }

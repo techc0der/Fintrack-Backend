@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import * as fin from '../finance.js';
-import { FLOW_TYPES } from '../db.js';
+import { FLOW_TYPES, OWNERS, METHODS } from '../db.js';
 
 const dateHint = "Date as YYYY-MM-DD, or 'today' / 'yesterday'.";
 
@@ -13,14 +13,27 @@ const DEFINITIONS = [
   {
     name: 'add_transaction',
     description:
-      'Record money moving. Four types: "income" (earned), "expense" (spent), "borrow" (money received ' +
-      'that must be paid back — a loan, credit card spend, cash from a friend) and "repay" (paying debt ' +
-      'back). Borrowing is NOT income and repaying is NOT an expense; filing them wrong distorts the ' +
-      "user's savings rate. Pick the closest category listed in the context.",
+      'Record money moving. Seven types. "income" (earned) and "expense" (spent and gone) are the ' +
+      'everyday two. "invest" is money put into a mutual fund, SIP, stocks, gold, FD or property — it ' +
+      'leaves the purse but is still theirs. The other four move money between them and other people: ' +
+      '"borrow" (someone hands them money they must pay back), "repay" (they hand it back), "lend" ' +
+      '(they hand someone money that person will return — "gave 2000 to Abhinav") and "recover" (that ' +
+      'person returns it, in full or in part). Only "expense" is spending: borrowing is not income, ' +
+      'lending is not an expense, and a recovery is not income. Every entry belongs to an owner — ' +
+      '"me" or "father" — and money out is either cash or bank/UPI. Pick the closest category listed ' +
+      'in the context for that same flow type.',
     schema: z.object({
-      type: z.enum(FLOW_TYPES).describe('income | expense | borrow | repay'),
+      type: z.enum(FLOW_TYPES).describe('income | expense | invest | borrow | repay | lend | recover'),
       amount: z.number().positive().describe('Positive amount in the user currency'),
       category: z.string().describe('Category name, e.g. "Groceries"'),
+      owner: z
+        .enum(OWNERS)
+        .optional()
+        .describe("Whose money: 'father' when the user says father's / papa's / dad's money, else 'me'"),
+      method: z
+        .enum(METHODS)
+        .optional()
+        .describe("How it moved: 'cash' for notes in hand, 'bank' for UPI, card or transfer"),
       date: z.string().optional().describe(dateHint),
       note: z.string().optional().describe('Short description of the transaction'),
       account: z.string().optional().describe('Account name, e.g. "Cash" or "Bank"'),
@@ -36,6 +49,8 @@ const DEFINITIONS = [
       from: z.string().optional().describe(dateHint),
       to: z.string().optional().describe(dateHint),
       type: z.enum(FLOW_TYPES).optional(),
+      owner: z.enum(OWNERS).optional().describe("Restrict to one purse: 'me' or 'father'"),
+      method: z.enum(METHODS).optional().describe("Restrict to 'cash' or 'bank'"),
       category: z.string().optional(),
       search: z.string().optional().describe('Free-text match against note and category'),
       limit: z.number().int().min(1).max(100).optional().describe('Defaults to 25'),
@@ -50,6 +65,8 @@ const DEFINITIONS = [
       type: z.enum(FLOW_TYPES).optional(),
       amount: z.number().positive().optional(),
       category: z.string().optional(),
+      owner: z.enum(OWNERS).optional(),
+      method: z.enum(METHODS).optional(),
       date: z.string().optional().describe(dateHint),
       note: z.string().optional(),
     }),
@@ -94,6 +111,26 @@ const DEFINITIONS = [
       months: z.number().int().min(1).max(24).optional().describe('Defaults to 6'),
     }),
     run: (userId, { months }) => fin.monthlyTrend(userId, months ?? 6),
+  },
+  {
+    name: 'get_hisaab',
+    description:
+      "The hisaab ledger for one month: income, spent (split cash vs bank/UPI), invested, the credit " +
+      'position and the running balance, reported separately for "me" and "father". Use this for any ' +
+      "question about whose money it is, what is left, who owes whom, or father's side of the " +
+      'accounts. Per owner it returns owedToMe (their money still out with other people), owedByMe ' +
+      '(money they are holding that belongs to others) and creditBalance (owedByMe minus owedToMe, so ' +
+      'negative means they are owed). Balance is cumulative to the end of that month.',
+    schema: z.object({
+      month: z.string().optional().describe('YYYY-MM; defaults to the current month'),
+    }),
+    run: (userId, { month }) => fin.hisaab(userId, month),
+  },
+  {
+    name: 'list_hisaab_months',
+    description: 'Which months have entries, newest first. Use before asking about an older month.',
+    schema: z.object({}),
+    run: (userId) => fin.hisaabMonths(userId),
   },
   {
     name: 'list_budgets',
